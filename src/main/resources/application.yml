@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/test
+    username: taofei
+    password: taofei
+    driver-class-name: com.mysql.jdbc.Driver
+logging:
+  level:
+    com:
+      example:
+       mapper: debug
