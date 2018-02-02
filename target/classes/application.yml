@@ -1,4 +1,9 @@
 spring:
+  thymeleaf:
+    mode: HTML5
+    encoding: UTF-8
+    content-type: text/html
+    cache: false
   datasource:
     url: jdbc:mysql://localhost:3306/test
     username: taofei

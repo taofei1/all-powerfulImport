@@ -16,7 +16,7 @@ public interface MarkMapper {
     int findMarkBySidAndCid(@Param("sid") String sid,@Param("cid") String cid);
     @Update("update mark set mark=#{mark} where sid=#{s.sid} and cid=#{c.cid}")
     void updateMarkBySidAndCid(@Param("s") Student student, @Param("c") Course course,@Param("mark") Integer mark);
-    
+
     @Select("select m.*,s.*,c.* from mark m left join student s on s.sid=m.sid " +
             "left join course c on c.cid=m.cid")
     List<Mark> getAllMark();

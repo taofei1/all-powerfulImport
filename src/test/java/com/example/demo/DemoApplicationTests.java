@@ -5,6 +5,7 @@ import com.example.domain.Student;
 import com.example.mapper.CourseMapper;
 import com.example.mapper.MarkMapper;
 import com.example.mapper.StudentMapper;
+import com.example.mapper.SynonymMapper;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -27,6 +28,8 @@ public class DemoApplicationTests {
 	private CourseMapper courseMapper;
 	@Autowired
 	private MarkMapper markMapper;
+	@Autowired
+	private SynonymMapper synonymMapper;
 	@Test
 	public void contextLoads() {
 		Student s=studentMapper.findBySid("B13040932");
@@ -84,5 +87,15 @@ public class DemoApplicationTests {
     @Test
 	public void selectBySid(){
 		System.out.println(courseMapper.selectBySid("B13040932"));
+	}
+
+	@Test
+	public void testFindAll() {
+		System.out.println(synonymMapper.findAll());
+	}
+
+	@Test
+	public void findOne() {
+		System.out.println(synonymMapper.findById(2));
 	}
 }
