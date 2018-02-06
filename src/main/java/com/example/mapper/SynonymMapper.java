@@ -19,11 +19,13 @@ public interface SynonymMapper {
     @Select("select * from synonym")
     List<Synonym> findAll();
 
+    @Select("select * from synonym where table_name=#{tableName} and enable_='Y'")
+    List<Synonym> findByTableName(String tableName);
     @ResultMap("synonymMapping")
-    @Select("select * from synonym where id=#{id}")
+    @Select("select * from synonym where id=#{id} and enable_='Y'")
     Synonym findById(Integer id);
 
-    @Update("update synonym set table_=#{table},column_=#{column},column_name=#{columnName},synonym_name=#{synonymName},enable_=#{enable} where id=#{id}")
+    @Update("update synonym set table_=#{table},column_=#{column},column_name=#{columnName},synonym_name=#{synonymName},enable_=#{enable} where id=#{id} ")
     int updateSynonym(Synonym synonym);
 
     @Insert("insert into synonym(table_,column_,column_name,synonym_name,enable_) values(#{table},#{column},#{columnName},#{synonymName},#{enable})")
