@@ -22,4 +22,5 @@ public interface StudentMapper {
      void updateStudent(Student student);
      @Delete("delete from student where sid=#{sid}")
      void deleteStudent(String sid);
+
 }

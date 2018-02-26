@@ -2,21 +2,27 @@ package com.example.demo;
 
 import com.example.domain.Course;
 import com.example.domain.Student;
-import com.example.mapper.CourseMapper;
-import com.example.mapper.MarkMapper;
-import com.example.mapper.StudentMapper;
-import com.example.mapper.SynonymMapper;
+import com.example.mapper.*;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.Arrays;
+import java.util.List;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -30,6 +36,30 @@ public class DemoApplicationTests {
 	private MarkMapper markMapper;
 	@Autowired
 	private SynonymMapper synonymMapper;
+	@Autowired
+	private CommonInsertMapper commonInsertMapper;
+	private MockMvc mockMvc;
+	@Autowired
+	private WebApplicationContext wac;
+
+	//@Autowired
+	//private MockHttpSession session;// 注入模拟的http session
+	//
+	//@Autowired
+	//private MockHttpServletRequ1est request;// 注入模拟的http request\
+
+	@Before // 在测试开始前初始化工作
+	public void setup() {
+		this.mockMvc = MockMvcBuilders.webAppContextSetup(this.wac).build();
+	}
+
+	@Test
+	public void testPrimaryKeys() throws Exception {
+		MvcResult result = mockMvc.perform(get("/importStudent/primaryKeys")).andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_JSON_UTF8))// 预期返回值的媒体类型text/plain;charset=UTF-8
+				.andReturn();// 返回执行请求的结果
+		System.out.println(result.getResponse().getContentAsString());
+
+	}
 	@Test
 	public void contextLoads() {
 		Student s=studentMapper.findBySid("B13040932");
@@ -97,5 +127,12 @@ public class DemoApplicationTests {
 	@Test
 	public void findOne() {
 		System.out.println(synonymMapper.findById(2));
+	}
+
+	@Test
+	public void testCommonInsert() {
+		List fieldList = Arrays.asList("sid", "sname", "age");
+		List valueList = Arrays.asList("222", "xiaohua", 22);
+		commonInsertMapper.insertByCritear("student", fieldList, valueList);
 	}
 }

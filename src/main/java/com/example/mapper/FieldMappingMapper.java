@@ -13,4 +13,6 @@ public interface FieldMappingMapper {
     @Results({@Result(id = true, property = "id", column = "id"), @Result(property = "tableName", column = "table_name"), @Result(property = "field", column = "field"), @Result(property = "fieldName", column = "field_name"), @Result(property = "fieldType", column = "field_type"), @Result(property = "defaultValue", column = "default_value"), @Result(property = "isEnable", column = "enable_")})
     @Select("select * from fieldmapping where table_name=#{tableName} and enable_='Y'")
     List<FieldMapping> findByTableName(String tableName);
+
+
 }

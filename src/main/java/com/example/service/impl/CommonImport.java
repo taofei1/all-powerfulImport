@@ -1,29 +1,25 @@
 package com.example.service.impl;
 
-import com.example.domain.Difference;
-import com.example.domain.PrimaryKey;
-import com.example.domain.Synonym;
-import com.example.mapper.DifferenceMapper;
-import com.example.mapper.ImportMapper;
-import com.example.mapper.SynonymMapper;
-import com.github.pagehelper.StringUtil;
-import org.apache.commons.collections4.ListUtils;
+import com.example.demo.HeaderField;
+import com.example.domain.*;
+import com.example.mapper.*;
 import org.apache.poi.hssf.usermodel.HSSFDataFormat;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.xmlbeans.impl.tool.Diff;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
-
+import org.springframework.web.multipart.MultipartFile;
 import java.io.*;
 import java.text.DecimalFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
+@Service
 public class CommonImport {
     @Autowired
     private ImportMapper importMapper;
@@ -31,17 +27,18 @@ public class CommonImport {
     private SynonymMapper synonymMapper;
     @Autowired
     private DifferenceMapper differenceMapper;
+    @Autowired
+    private FieldMappingMapper fieldMappingMapper;
+    @Autowired
+    private CommonInsertMapper commonInsertMapper;
     private int firstRowIndex = -1;
 
-    public void importExcel(String importName, String primarykey, File file) {
-        int sheetIndex = -1;
-        if (!file.exists()) {
-            throw new RuntimeException("文件不存在！");
-        }
+    @Transactional
+    public void importExcel(String importName, String primarykey, MultipartFile file) throws Exception {
         InputStream is = null;
         try {
-            is = new FileInputStream(file);
-        } catch (FileNotFoundException e) {
+            is = file.getInputStream();
+        } catch (IOException e) {
             e.printStackTrace();
         }
         Workbook wb = null;
@@ -58,55 +55,148 @@ public class CommonImport {
                 e.printStackTrace();
             }
         } else {
-            throw new RuntimeException("文件格式不支持，仅支持excel!");
+            throw new Exception("文件格式不支持，仅支持excel!");
         }
-        List<PrimaryKey> list = null;
+        List<PrimaryKey> list;
         if (StringUtils.isEmpty(primarykey)) {
             list = importMapper.findByNameWithNoPrimaryKey(importName);
         } else {
             list = importMapper.findByNameWithPrimaryKey(importName, primarykey);
         }
+        List<String> tableList = new ArrayList<>();
+        for (PrimaryKey primaryKey : list) {
+            tableList.add(primaryKey.getTable_name());
+        }
         if (CollectionUtils.isEmpty(list)) {
-            throw new RuntimeException("查询不到主键信息！");
+            throw new Exception("查询不到主键信息！");
         }
         for (int i = 0; i < wb.getNumberOfSheets(); i++) {
-            HashMap fieldMap = null;
+            HashMap<String, List> fieldMap;
             Sheet s = wb.getSheetAt(i);
             if (s == null) continue;
             fieldMap = getHeaderField(list, s);
             if (fieldMap != null) {
-                sheetIndex = i;
             } else {
+                //该页没数据
                 continue;
+            }
+            if (firstRowIndex == -1) {
+                //该页找不到标题行翻下页
+                continue;
+            }
+            for (int j = firstRowIndex + 1; j < s.getLastRowNum(); j++) {
+                Row r = s.getRow(j);
+                if (r == null) {
+                    continue;
+                }
+                for (String tableName : tableList) {
+                    List<HeaderField> table;
+                    List<String> values = new ArrayList<>();
+                    if (fieldMap.containsKey(tableName + "_field")) {
+                        table = fieldMap.get(tableName + "_field");
+                        int flag = 0;
+                        for (HeaderField headerField : table) {
+                            values.add(getStringVal(r.getCell(headerField.getCellNum())));
+                            if (flag == 0 && headerField.getIsPrimaryKey() == 1) {
+                                flag = 1;
+                            }
+                        }
+                        if (flag == 0) {
+                            throw new Exception(tableName + "表主键没有找到！");
+                        } else {
+                            List<Object> objectList = processFieldType(table, values);
+                            commonInsertMapper.insertByCritear(tableName, table, objectList);
+                        }
+
+                    }
+                }
+
             }
 
         }
     }
 
-    //寻找标题列
-    private HashMap getHeaderField(List<PrimaryKey> list, Sheet s) {
-        HashMap fieldMap = new HashMap();
+    /**
+     * 处理非String(varchar) 类型的字段
+     *
+     * @param fieldList 字段列表
+     * @param values    等待插入的值
+     * @return 新的字段列表
+     */
+    private List<Object> processFieldType(List<HeaderField> fieldList, List<String> values) throws Exception {
+        List<Object> list = new ArrayList<>();
+        list.addAll(values);
+        for (int i = 0; i < fieldList.size(); i++) {
+            if (!"".equalsIgnoreCase(values.get(i))) {
+                String fieldType = fieldList.get(i).getFieldType();
+                if ("".equals(fieldType) || "String".equalsIgnoreCase(fieldType)) {
+                    continue;
+                } else if ("int".equalsIgnoreCase(fieldType) || "Integer".equalsIgnoreCase(fieldType)) {
+                    list.set(i, Integer.parseInt(values.get(i)));
+                } else if ("double".equalsIgnoreCase(fieldType)) {
+                    list.set(i, Double.parseDouble(values.get(i)));
+                } else if ("float".equalsIgnoreCase(fieldType)) {
+                    list.set(i, Float.parseFloat(values.get(i)));
+                } else if (fieldType.substring(0, fieldType.indexOf("(")).equalsIgnoreCase("date")) {
+                    SimpleDateFormat sdf = new SimpleDateFormat(fieldType.substring(fieldType.indexOf("(") + 1, fieldType.length() - 1));
+                    try {
+                        list.set(i, sdf.parse(values.get(i)));
+                    } catch (ParseException e) {
+                        System.out.println(fieldType + "日期类型转换异常！");
+                        e.printStackTrace();
+                    }
+                } else {
+                    throw new Exception("未知类型:" + fieldType);
+                }
+            }
+
+        }
+        return list;
+    }
+
+    /**
+     * 读取标题行列位置及类型信息
+     *
+     * @param list
+     * @param s
+     * @return
+     */
+    private HashMap getHeaderField(List<PrimaryKey> list, Sheet s) throws Exception {
+        HashMap<String, List> fieldMap = new HashMap<>();
         for (int i = 0; i < list.size(); i++) {
             PrimaryKey primaryKey = list.get(i);
             String tableName = primaryKey.getTable_name();
             String primarykeyField = primaryKey.getPrimarykey();
             String primarykeyFieldName = primaryKey.getPrimarykey_name();
-            String historyField = primaryKey.getHistory_column();
-            String recentField = primaryKey.getRecent_column();
-            String forcerencentField = primaryKey.getForce_recent_column();
+
             if (StringUtils.isEmpty(primarykeyField)) {
-                throw new RuntimeException("请设置[" + tableName + "]的主键字段");
+                throw new Exception("请设置[" + tableName + "]的主键字段！");
             }
             List<Synonym> synonymList = synonymMapper.findByTableName(tableName);
             List<Difference> differenceList = differenceMapper.findByTableName(tableName);
-            HashMap primaryKeyMap = new HashMap();
-            for (int j = 0; j < 10; j++) {
-                Row row = (Row) s.getRow(j);
+            String primaryKeySynonym = "";
+            for (Synonym synonym : synonymList) {
+                if (synonym.getTable().equals(tableName) && synonym.getColumn().equals(primarykeyField)) {
+                    primaryKeySynonym = synonym.getSynonymName();
+                }
+            }
+
+            List fieldList = new ArrayList();
+            int startLine = 0;
+            int endLine = s.getLastRowNum();
+            if (firstRowIndex != -1) {
+                startLine = firstRowIndex;
+                endLine = firstRowIndex + 1;
+            }
+            for (int j = startLine; j < endLine; j++) {
+                Row row =  s.getRow(j);
                 if (row == null) {
                     continue; //排除空行
                 }
+                int flag=0;
                 for (int k = 0; k < row.getLastCellNum(); k++) {
-                    Cell cell = (Cell) row.getCell(k);
+                    flag = 0;
+                    Cell cell = row.getCell(k);
                     if (cell == null) {
                         continue;//排除空列
                     }
@@ -114,35 +204,109 @@ public class CommonImport {
                     if (StringUtils.isEmpty(val)) {
                         continue; //跳过空格
                     }
-                    String tmpVal = val;
-                    Difference difference = differenceMapper.findByDifferenceName(val);
-                    if (difference != null) {
-                        val = difference.getFieldName();
-                    }
-                    if (primarykeyFieldName.indexOf(val) == -1 && historyField.indexOf(val) == -1 && recentField.indexOf(val) == -1 && forcerencentField.indexOf(val) == -1) {
+                    HeaderField headerField = new HeaderField();
+                    if (val.equals(primarykeyFieldName)) {
+                        headerField.setCellNum(k);
+                        headerField.setField(primarykeyField);
+                        headerField.setIsPrimaryKey(1);
+                        headerField.setFieldType(headerField.getFieldType());
 
-                    }
+                        flag = 1;
+                    } else if (!primaryKeySynonym.equals("")) {
+                        String[] primarykeySy = primaryKeySynonym.split(",");
+                        for (String a : primarykeySy) {
+                            if (val.equals(a)) {
+                                headerField.setCellNum(k);
+                                headerField.setField(primarykeyField);
+                                headerField.setIsPrimaryKey(1);
+                                headerField.setFieldType(headerField.getFieldType());
 
+                                flag = 1;
+                                break;
+                            }
+                        }
+                    }
+                    if (flag == 0) {
+                        List<FieldMapping> mappingList = fieldMappingMapper.findByTableName(tableName);
+                        for (FieldMapping fieldMapping : mappingList) {
+                            if (fieldMapping.getField().equals(val)) {
+                                headerField.setCellNum(k);
+                                headerField.setField(fieldMapping.getField());
+                                headerField.setFieldType(fieldMapping.getFieldType());
+                                flag = 1;
+                                break;
+                            } else {
+                                String fieldSynonym = "";
+                                for (Synonym synonym : synonymList) {
+                                    if (synonym.getTable().equals(tableName) && synonym.getColumn().equals(fieldMapping.getField())) {
+                                        fieldSynonym = synonym.getSynonymName();
+                                        break;
+                                    }
+                                }
+                                if (!fieldSynonym.equals("")) {
+                                    String[] fieldSynonymList = fieldSynonym.split(",");
+                                    for (String synonym : fieldSynonymList) {
+                                        if (synonym.equals(val)) {
+                                            headerField.setCellNum(k);
+                                            headerField.setField(fieldMapping.getField());
+                                            headerField.setFieldType(fieldMapping.getFieldType());
+
+                                            flag = 1;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (flag == 1) {
+
+                                break;
+                            }
+                        }
+
+                    } else {
+                        //找到主键
+                        if (firstRowIndex == -1) {
+                            firstRowIndex = j;
+                        }
+                    }
+                    if (headerField != null) {
+                        fieldList.add(headerField);
+                    }
 
                 }
+                if (flag == 1) {
+                    break;
+                }
+
             }
+            fieldMap.put(tableName + "_field",fieldList);
         }
-        return null;
+        return fieldMap;
     }
 
+    /**
+     * 将所有类型的单元格值转换为String类型读出
+     * @param cell 列
+     * @return 值
+     */
     public String getStringVal(Cell cell) {
         String v = "";
         switch (cell.getCellTypeEnum()) {
             case _NONE:
                 v = "";
+                break;
             case BLANK:
                 v = "";
+                break;
             case STRING:
                 v = cell.getStringCellValue();
+                break;
             case BOOLEAN:
                 v = cell.getBooleanCellValue() ? "true" : "false";
+                break;
             case FORMULA:
                 v = cell.getCellFormula();
+                break;
             case NUMERIC:
                 if (DateUtil.isCellDateFormatted(cell)) {
                     SimpleDateFormat sdf = null;

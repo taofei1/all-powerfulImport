@@ -1,5 +1,49 @@
+
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Insert title here</title>
+</head>
 
+<script src="http://code.jquery.com/jquery-latest.js"></script>
+<script src="../static/layer/layer.js"></script>
+<script>
+    $(function () {
+        $('#pk').click(function () {
+            $.get({
+                url: "improtStudent/primaryKeys",
+                dataType: "json",
+                success: function (ret) {
+                    var rows = ret.data.length;
+                    //自定页
+                    layer.open({
+                        type: 1,
+                        skin: 'layui-layer-demo', //样式类名
+                        closeBtn: 0, //不显示关闭按钮
+                        anim: 2,
+                        shadeClose: true, //开启遮罩关闭
+                        content: '<div style="text-align: center;">' +
+                        '' +
+                        '<div style="height: 15px;"></div>' +
+                        '<a href="#" id="text_commit" class="button white" style="display: inline;">确定</a>' +
+                        '</div>'
+                    });
+                }
 
+            });
+        })
+    })
+</script>
+<body>
+<h1 th:inlines="text">文件上传</h1>
+<form action="import" method="post" enctype="multipart/form-data">
+    <p>
+        <button id="pk">选择主键:</button>
+        <input type="text" name="primaryKey"></p>
+    <p>选择文件: <input type="file" name="fileName"/></p>
+    <p><input type="submit" value="提交"/></p>
+    <p><input type="hidden" value="importStudent"/></p>
+</form>
+</body>
 </html>
